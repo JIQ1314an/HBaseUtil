@@ -1,7 +1,7 @@
 package cn.edu.zut.util;
 
 /**
- * @Author 86131
+ * @Author jiquan
  * @Date 2021/5/1
  * @TIME 9:05
  * 读取Properties文件的工具类，默认读取resources下所有.properties文件(除log4j.properties外)
