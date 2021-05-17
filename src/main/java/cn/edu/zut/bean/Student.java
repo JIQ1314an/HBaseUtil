@@ -6,7 +6,7 @@ package cn.edu.zut.bean;
  * @TIME 11:01
  */
 public class Student {
-    private  String name;
+    private String name;
     private int age;
     private String phone;
 

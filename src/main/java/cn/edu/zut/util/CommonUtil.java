@@ -20,11 +20,11 @@ import java.util.function.Function;
 public class CommonUtil {
     private static final Logger logger = LoggerFactory.getLogger(CommonUtil.class);
 
-    public static <E> Map<String, Object> convert(E bean) {
+    public static <T> Map<String, Object> convert(T bean) {
         return convert(bean, true);
     }
 
-    public static <E> Map<String, Object> convert(E bean, boolean isIgnoreNull) {
+    public static <T> Map<String, Object> convert(T bean, boolean isIgnoreNull) {
         Map<String, Object> result = new HashMap<>();
         Class<?> clazz = bean.getClass();
         Field[] declaredFields = clazz.getDeclaredFields();
@@ -75,6 +75,24 @@ public class CommonUtil {
             list.add(valueStr);
         }
         return list;
+    }
+
+    public static <T> String getFieldValue(T bean, String fieldName) {
+        if (bean == null) return null;
+        Class<?> clazz = bean.getClass();
+        Object value = null;
+        try {
+            Field id = clazz.getDeclaredField(fieldName);
+            id.setAccessible(true);
+            value = id.get(bean);
+        } catch (NoSuchFieldException e) {
+            logger.error("对象必须有" + fieldName + "字段，但是接收到的对象不具备" + fieldName + "字段", e);
+
+        } catch (IllegalAccessException e) {
+            logger.error("字段 " + fieldName + " 不具备访问权限", e);
+        }
+        return value == null ? null : value.toString();
+
     }
 
     public static void close(Connection connection) {

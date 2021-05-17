@@ -1,6 +1,7 @@
 package cn.edu.zut.util;
 
 
+import org.apache.commons.beanutils.ConvertUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.TableName;
@@ -10,7 +11,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 
 /**
@@ -363,14 +366,102 @@ public class HBaseOptUtil {
         return flag;
 
     }
-  public  static  boolean putByRowKey(String tableName, String rowKey, String family, String column, Object value){
-          Map<String,Object> map = new HashMap<>();
-          map.put(column,value);
-          return putByRowKey(tableName,rowKey,family,map);
-  }
-  public  static<E>  boolean putByRowKey(String tableName,String rowKey,String family, E bean){
-        return putByRowKey(tableName,rowKey,family,CommonUtil.convert(bean,true));
-  }
+
+    public static boolean putByRowKey(String tableName, String rowKey, String family, String column, Object value) {
+        Map<String, Object> map = new HashMap<>();
+        map.put(column, value);
+        return putByRowKey(tableName, rowKey, family, map);
+    }
+
+    public static <T> boolean putByRowKey(String tableName, String rowKey, String family, T bean) {
+        return putByRowKey(tableName, rowKey, family, CommonUtil.convert(bean, true));
+    }
+
+    /**
+     * 以bean对象字段中的id作为rowKey
+     *
+     * @param tableName
+     * @param family
+     * @param bean      必须有id这个字段，且值不能为null
+     * @param <T>
+     * @return boolean
+     */
+    public static <T> boolean put(String tableName, String family, T bean) {
+        String rowKey = CommonUtil.getFieldValue(bean, "id");
+        if (rowKey == null) {
+            logger.error("对象的id字段数据为空，添加数据失败");
+            return false;
+        }
+        return putByRowKey(tableName, rowKey, family, CommonUtil.convert(bean));
+    }
+
+    public static <T> boolean puts(String tableName, String family, List<T> beans) {
+        if (beans == null || beans.isEmpty()) {
+            logger.warn("数据为空，未添加任何数据");
+            return false;
+        }
+        flag = false;
+        Table table = getTable(tableName);
+        List<Put> puts = new ArrayList<>();
+        beans.forEach(bean -> puts.add(convertToPut(bean, family)));
+        if (table != null) {
+            try {
+                table.put(puts);
+            } catch (IOException e) {
+                logger.error("插入数据异常", e);
+            } finally {
+                CommonUtil.close(table);
+            }
+            flag = true;
+        }
+        return flag;
+    }
+
+    /**
+     * 通过rowKey查询到数据并封装成bean对象，
+     * 所以必须要知道bean的类型
+     *
+     * @param tableName
+     * @param rowKey
+     * @param family
+     * @param beanType
+     * @param <T>
+     * @return
+     */
+    public static <T> T getBeanByRowKey(String tableName, String rowKey, String family, Class<T> beanType) {
+        //反射的特点，可以通过字段或者构造器去创建对象
+        Table table = getTable(tableName);
+        if (table == null) return null;
+        T t = null;
+        try {
+            Constructor<T> constructor = beanType.getConstructor();
+            t = constructor.newInstance();
+            Result result = table.get(new Get(Bytes.toBytes(rowKey)));
+            Map<byte[], byte[]> familyMap = result.getFamilyMap(Bytes.toBytes(family));
+            for (Map.Entry<byte[], byte[]> entry : familyMap.entrySet()) {
+                //key为列名
+                Field decField = beanType.getDeclaredField(Bytes.toString(entry.getKey()));
+                decField.setAccessible(true);
+                //set方法，给t创建字段 (类型（decField.getType） 字段名（decField.getName） = 字段值(decField.get(obj)))
+                decField.set(t, ConvertUtils.convert(Bytes.toString(entry.getValue()), decField.getType()));
+            }
+        } catch (NoSuchMethodException e) {
+            logger.error("BeanType必须具备无参构造器, 而当前对象不具备无参构造器", e);
+        } catch (InstantiationException e) {
+            logger.error("实例化Bean对象异常", e);
+        } catch (IllegalAccessException e) {
+            logger.error("访问权限异常", e);
+        } catch (InvocationTargetException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            logger.error("根据 RowKey 获取数据失败", e);
+        } catch (NoSuchFieldException e) {
+            logger.error("该字段不存在", e);
+        } finally {
+            CommonUtil.close(table);
+        }
+        return t;
+    }
 
     /**
      * 实现通过传入对象的方式添加数据【需要利用反射机制】
@@ -446,5 +537,16 @@ public class HBaseOptUtil {
             throw new IllegalArgumentException(minVersion + " 必须大于等于 1");
         }
 
+    }
+
+    private static <T> Put convertToPut(T bean, String family) {
+        Put put = new Put(Bytes.toBytes(CommonUtil.getFieldValue(bean, "id")));
+        //map的key是列名，value是列值 (其中，列名id及其对应值也会添加进去)
+        CommonUtil.convert(bean, true).forEach((key, value) -> put.addColumn(
+                Bytes.toBytes(family),
+                Bytes.toBytes(key),
+                Bytes.toBytes(String.valueOf(value))
+        ));
+        return put;
     }
 }
