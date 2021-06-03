@@ -1,7 +1,7 @@
 package cn.edu.zut.bean;
 
 /**
- * @Author 86131
+ * @Author jiquan
  * @Date 2021/5/10
  * @TIME 11:01
  */

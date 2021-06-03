@@ -112,6 +112,7 @@ public class HBaseOptUtil {
         return createTable(tableName, CommonUtil.convert("column_families"), 1, 1);
     }
 
+
     public static boolean createTable(String tableName, String family, int minVersion, int maxVersion) {
         List<String> families = new LinkedList();
         families.add(family);
@@ -236,7 +237,7 @@ public class HBaseOptUtil {
             }
             flag = true;
         } catch (IOException e) {
-            logger.error("删除列异常", e);
+            logger.error("删除列异常,列名可能不存在", e);
         } finally {
             CommonUtil.close(admin);
         }
@@ -465,6 +466,8 @@ public class HBaseOptUtil {
 
     /**
      * 实现通过传入对象的方式添加数据【需要利用反射机制】
+     * 默认传入DataSet对象,该对象默认读取配置文件中的信息
+     * 最大的缺点：用户不可以自定义对象
      *
      * @return boolean
      */
